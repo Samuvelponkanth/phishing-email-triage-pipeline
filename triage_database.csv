@@ -1,0 +1,1 @@
+timestamp,sender,recipient,subject,originating_ip,spf_status,dkim_status,dmarc_status,abuseipdb_score,virustotal_positives,risk_level

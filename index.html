@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Phishing Triage SOC Pipeline</title>
+    <style>
+        body { background-color: #0f172a; color: #e2e8f0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; padding: 20px; margin: 0; }
+        .container { max-width: 950px; margin: auto; background: #1e293b; padding: 30px; border-radius: 8px; box-shadow: 0 4px 15px rgba(0,0,0,0.5); border-top: 5px solid #38bdf8; }
+        h1 { color: #38bdf8; border-bottom: 2px solid #334155; padding-bottom: 10px; margin-top: 0; }
+        textarea { width: 100%; height: 160px; background: #0f172a; color: #e2e8f0; border: 1px solid #334155; border-radius: 6px; padding: 12px; font-family: monospace; font-size: 14px; resize: vertical; box-sizing: border-box; }
+        button, .btn { background: #0284c7; color: white; border: none; padding: 12px 20px; border-radius: 6px; font-weight: bold; cursor: pointer; margin-top: 10px; font-size: 15px; text-decoration: none; display: inline-block; }
+        button:hover, .btn:hover { background: #0369a1; }
+        .save-btn { background: #16a34a; }
+        .save-btn:hover { background: #15803d; }
+        .section { background: #0f172a; padding: 15px; border-radius: 6px; margin-top: 15px; border: 1px solid #334155; }
+        h2 { color: #38bdf8; font-size: 18px; margin-top: 25px; border-bottom: 1px solid #334155; padding-bottom: 5px; }
+        
+        /* Dynamic Risk Badges */
+        .badge-high { background: #7f1d1d; color: #fca5a5; padding: 4px 8px; border-radius: 4px; font-weight: bold; }
+        .badge-medium { background: #78350f; color: #fde68a; padding: 4px 8px; border-radius: 4px; font-weight: bold; }
+        .badge-low { background: #14532d; color: #86efac; padding: 4px 8px; border-radius: 4px; font-weight: bold; }
+
+        .alert { background: #14532d; color: #86efac; padding: 12px; border-radius: 6px; margin-bottom: 20px; font-weight: bold; }
+        ul { margin: 0; padding-left: 20px; }
+        li { margin-bottom: 8px; }
+        code { background: #1e293b; padding: 2px 6px; border-radius: 4px; font-family: monospace; word-break: break-all; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🛡️ Automated Phishing Email Triage Pipeline</h1>
+
+        {% if success_message %}
+            <div class="alert">{{ success_message }}</div>
+        {% endif %}
+
+        <form action="/analyze" method="POST">
+            <label for="email_content"><strong>Paste Raw Email Content (.EML format):</strong></label><br><br>
+            <textarea name="email_content" placeholder="Paste full raw email headers and body here..." required></textarea><br>
+            <button type="submit">🔍 Analyze & Verify Email</button>
+        </form>
+
+        {% if report %}
+            <hr style="border: 0; border-top: 1px solid #334155; margin: 30px 0;">
+            
+            <h2>Triage Report Results</h2>
+            <p><strong>Overall Risk Verdict:</strong> 
+                {% if report.risk_status == 'HIGH RISK' %}
+                    <span class="badge-high">{{ report.risk_status }}</span>
+                {% elif report.risk_status == 'MEDIUM RISK' %}
+                    <span class="badge-medium">{{ report.risk_status }}</span>
+                {% else %}
+                    <span class="badge-low">{{ report.risk_status }}</span>
+                {% endif %}
+            </p>
+
+            <div class="section">
+                <p><strong>Timestamp:</strong> {{ report.timestamp }}</p>
+                <p><strong>Subject:</strong> {{ report.subject }}</p>
+                <p><strong>Sender Name:</strong> {{ report.sender_name }}</p>
+                <p><strong>Sender Email:</strong> {{ report.sender_email }}</p>
+                <p><strong>Recipient Name:</strong> {{ report.recipient_name }}</p>
+                <p><strong>Recipient Email:</strong> {{ report.recipient_email }}</p>
+                <p><strong>Recipient Gateway IP:</strong> {{ report.recipient_ip }}</p>
+                <p><strong>Originating IP:</strong> {{ report.originating_ip }}</p>
+                <p><strong>IP Reputation (AbuseIPDB):</strong> {{ report.ip_reputation }}</p>
+                <p><strong>Authentication Status:</strong> <code>{{ report.auth_results }}</code></p>
+            </div>
+
+            <h2>URL Indicators (IOCs) & VirusTotal Check</h2>
+            <div class="section">
+                <ul>
+                    {% if report.urls %}
+                        {% for u in report.urls %}
+                            <li>
+                                <strong>URL:</strong> {{ u.defanged }} <br>
+                                <small>SHA-256: <code>{{ u.sha256 }}</code></small><br>
+                                <small style="color: #38bdf8;">VT Status: {{ u.vt_result }}</small>
+                            </li>
+                        {% endfor %}
+                    {% else %}
+                        <p>No URLs detected.</p>
+                    {% endif %}
+                </ul>
+            </div>
+
+            <h2>Attachment Artifacts & VirusTotal File Check</h2>
+            <div class="section">
+                <ul>
+                    {% if report.attachments %}
+                        {% for att in report.attachments %}
+                            <li>
+                                <strong>File:</strong> {{ att.filename }} ({{ att.size }} KB) <br>
+                                <small>SHA-256: <code>{{ att.sha256 }}</code></small><br>
+                                <small style="color: #38bdf8;">VT Status: {{ att.vt_result }}</small>
+                            </li>
+                        {% endfor %}
+                    {% else %}
+                        <p>No attachments detected.</p>
+                    {% endif %}
+                </ul>
+            </div>
+
+            <!-- SAVE TO CSV BUTTON FORM -->
+            <form action="/save" method="POST" style="margin-top: 20px;">
+                <input type="hidden" name="timestamp" value="{{ report.timestamp }}">
+                <input type="hidden" name="subject" value="{{ report.subject }}">
+                <input type="hidden" name="sender_email" value="{{ report.sender_email }}">
+                <input type="hidden" name="recipient_email" value="{{ report.recipient_email }}">
+                <input type="hidden" name="originating_ip" value="{{ report.originating_ip }}">
+                <input type="hidden" name="ip_reputation" value="{{ report.ip_reputation }}">
+                <input type="hidden" name="url_count" value="{{ report.url_count }}">
+                <input type="hidden" name="attachment_count" value="{{ report.attachment_count }}">
+                <input type="hidden" name="risk_status" value="{{ report.risk_status }}">
+                
+                <button type="submit" class="save-btn">💾 Save Result & Email Details to CSV Database</button>
+            </form>
+        {% endif %}
+    </div>
+</body>
+</html>
